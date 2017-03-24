@@ -279,147 +279,68 @@ class SemiCoastHead(SemiCoast):
         xh = self.onshorex(self.givenh)
         return xh - self.givenx
     
-class SemiCoastInfiltration(SemiCoastBase):
-    def __init__(self, k, H, c, N, Ln, rhof, rhos, Ls, label=None):
-        # ztop=0 and hs=0
-        SemiCoastBase.__init__(self, k, H, c, N * Ln, rhof, rhos, Ls, 0, 0, label)
-        self.findcase()
-        self.initialize()
+class IslandInterface:
+    def __init__(self, k=10, D=50, c=100, rhof=1000, rhos=1025, W=1000, N=0.001, Nstreamlines=None):
+        self.k = k
+        self.D = D
+        self.c = np.max((c, 1e-12))  # make sure c is above zero
+        self.rhof = rhof
+        self.rhos = rhos
+        self.W = W
         self.N = N
-        self.Ln = Ln
-        
-    def initialize(self):
-        self.C = -0.5 * self.k * (self.nus + 1) * self.H ** 2
-        self.h0 = self.nus * self.H * self.phi0
-        if self.case == 1:
-            self.pot0 = 0.5 * self.k * (self.nus + 1) / self.nus * self.h0 ** 2
-            self.doverlab = (1 - (3 * self.mu ** 2 / 2) ** (2 / 3)) / (
-            2 * self.mu)  # Eq.28
-            self.xtoe = -self.doverlab * self.lab
-            self.xtip = self.Loverlab * self.lab
-        elif self.case == 2:
-            self.xtoe = self.doverlab * self.lab
-            self.xtip = (self.doverlab + self.Loverlab) * self.lab
-        elif self.case == 3:
-            self.doverlab = (1 - self.phi0 ** 2) / (2 * self.mu)  # Eq.27 solved for u with phi=1 and phi0
-            self.xtoe = -self.doverlab * self.lab
-            self.xtip = self.Lsoverlab * self.lab
-        elif self.case == 4:
-            self.xtoe = self.doverlab * self.lab
-            self.xtip = self.Lsoverlab * self.lab
-        else:
-            print('Error: case was not found')        
-    
-        if (self.case == 1) or (self.case == 3):  # toe below the land
-            self.pot0 = 0.5 * self.k * (self.nus + 1) / self.nus * self.h0 ** 2
-        else:
-            self.pot0 = 0.5 * self.k * (self.h0 + self.H) ** 2 + self.C
-
-    def toe(self):
-        return self.xtoe
-
-    def tip(self):
-        return self.xtip
-    
-    def interface(self, N=100):
-        # returns (x, z) where z is interface elevation for N points
-        if self.case == 1:
-            phi = nan * ones(N)
-            u = np.linspace(-self.doverlab, self.Loverlab, N)
-            u1 = (-self.doverlab <= u) & (u <= 0)
-            phi[u1] = sqrt(-2 * self.mu * u[u1] + self.phi0 ** 2)  # Eq. 27
-            u2 = (0 < u) & (u <= self.Loverlab)
-            phi[u2] = (u[u2] - self.Loverlab) ** 2 / 6
-            x = u * self.lab
-        elif self.case == 2:
-            u = np.linspace(0, self.Loverlab, N)
-            phi = (u - self.Loverlab) ** 2 / 6
-            x = (self.doverlab + u) * self.lab
-        elif self.case == 3:
-            phi = linspace(1, 0, N)
-            u = nan * ones(N)
-            phi1 = phi >= self.phi0
-            u[phi1] = (self.phi0 ** 2 - phi[phi1] ** 2) / (2 * self.mu)
-            phi2 = phi < self.phi0
-            u[phi2] = sqrt(3 * self.a / 2) * (
-            fint(phi[phi2], self.a) - fint(0, self.a)) + self.Lsoverlab
-            x = u * self.lab
-        elif self.case == 4:
-            phi = linspace(1, 0, N)
-            u = sqrt(3 * self.a / 2) * (fint(phi, self.a) - fint(0, self.a)) + (
-            self.Lsoverlab - self.doverlab)
-            x = (self.doverlab + u) * self.lab
-        h = self.nu * self.H * phi + self.hs
-        eta = (h - self.hs) / self.nu
-        zeta = self.ztop - eta
-        return x, zeta
-
-    #def head(self, x):
-    #    # Only implemented for Case 1
-    #    if self.case == 1:
-    #        u = x / self.lab
-    #        if u <= -self.doverlab:
-    #            phi = self.grad * (-self.doverlab - u) + 1
-    #        elif (u > -self.doverlab) & (u <= 0):
-    #            phi = sqrt(-2 * self.mu * u + self.phi0 ** 2)
-    #        elif (u > 0) & (u <= self.Loverlab):
-    #            phi = (u - self.Loverlab) ** 2 / 6
-    #        else:
-    #            phi = nan
-    #    elif self.case == 2:
-    #        pass
-    #    return self.nu * self.H * phi + self.hs
-
-    def onshorex(self, h):
-        # returns onshore x location of given head
-        phi = (h - self.hs) / (self.nu * self.H)
-        if self.case == 1:
-            if phi >= 1:
-                u = (1 - phi) * (self.nu * self.H) / (
-                self.grad * self.lab) - self.doverlab
-            elif (phi < 1) & (phi > self.phi0):
-                u = (self.phi0 ** 2 - phi ** 2) / (2 * self.mu)
-            else:
-                u = 0
-            x = u * self.lab
-        elif self.case == 2:
-            if phi > self.phi0:
-                u = (self.phi0 - phi) * (self.nu * self.H) / (
-                    self.grad * self.lab) - self.doverlab
-            else:
-                u = -doverlab
-            x = (self.doverlab + u) * self.lab
-        elif self.case == 3:
-            if phi >= 1:
-                u = (1 - phi) * (self.nu * self.H) / (
-                self.grad * self.lab) - self.doverlab
-            elif (phi < 1) & (phi > self.phi0):
-                u = (self.phi0 ** 2 - phi ** 2) / (2 * self.mu)
-            else:
-                u = 0
-            x = u * self.lab
-        elif self.case == 4:
-            if phi > self.phi0:
-                u = (self.phi0 - phi) * (self.nu * self.H) / (
-                    self.grad * self.lab) - self.doverlab
-            else:
-                u = -self.doverlab
-            x = (self.doverlab + u) * self.lab            
-        return x
-    
-    def plot(self, xmin=None, xmax=None, newfig=True):
-        if newfig:
-            if xmin is None:
-                xmin = self.toe()
-            if xmax is None:
-                xmax = self.tip()
-            figure(figsize=(8, 4))
-            plot([xmin, xmax], [self.ztop - self.H, self.ztop - self.H], linewidth=5, color='k')
-            plot([min(xmin, 0), min(xmax, 0)], [self.ztop, self.ztop], linewidth=5, color='k')
-            plot([max(xmin, 0), min(xmax, self.Ls)], [self.ztop, self.ztop], linewidth=5, color=[.8, .8, .8])
-            xlim(xmin, xmax)
-        x, z = self.interface()
-        plot(x, z, zorder=100, label=self.label)
+        self.Nstreamlines = Nstreamlines
+        #
+        self.alpha = self.rhof / (self.rhos - self.rhof)
+        self.phitoe = 0.5 * self.k * (self.alpha + 1) / (self.alpha ** 2) * self.D ** 2
+        self.C = -0.5 * self.k * (self.alpha + 1) / self.alpha * self.D ** 2
+        #
+        self.lab = sqrt(self.k * self.D * self.c)
+        self.nu = (self.rhos - self.rhof) / self.rhof
+        self.grad = self.N * self.W / (self.k * self.D)
+        self.mu =  self.grad * self.lab / self.D / self.nu
+        self.h0 = self.nu * self.D * (3 * self.mu ** 2 / 2) ** (1 / 3)
+        self.Loutflow = (18 * self.mu) ** (1 / 3) * self.lab
+    def plot(self, xmin=None, xmax=None, plotbase=True):
+        x = linspace(-self.W, self.W, 100)
+        phicoast = 0.5 * self.k * (self.alpha + 1) * self.h0 ** 2
+        phi = -self.N / 2 * (x ** 2 - self.W ** 2) + phicoast
+        h =  nan * ones(len(x))
+        h[phi <= self.phitoe] = sqrt(2 * phi[phi <= self.phitoe] / (self.k * (self.alpha + 1)))
+        h[phi > self.phitoe] = sqrt(2 / self.k * (phi[phi > self.phitoe] - self.C)) - self.D
+        zeta = -self.D * ones(len(x))
+        zeta[phi <= self.phitoe] = -self.alpha * h[phi <= self.phitoe]
+        # Outflow zone
+        x2 = linspace(0, self.Loutflow, 100)
+        phi2 = (x2 / self.lab - self.Loutflow / self.lab) ** 2 / 6
+        h2 = self.nu * self.D * phi2
+        zeta2 = -h2 / self.nu
+        # Plot results
+        figure(figsize=(10, 5))
+        plot(x, h, 'b')
+        plot(x2 + self.W, h2, 'b')
+        plot(-x2 - self.W, h2, 'b')
+        plot(x, zeta, 'r')
+        plot(x2 + self.W, zeta2, 'r')
+        plot(-x2 - self.W, zeta2, 'r')
+        # Plot streamlines
+        xh = np.hstack(((-x2 - self.W)[::-1], x, x2 + self.W))
+        Qoutflow = -self.k * (0 - zeta2) * self.D * self.nu * (x2 / self.lab - self.Loutflow / self.lab) / (3 * self.lab)
+        Qh = np.hstack((-Qoutflow[::-1], self.N * x, Qoutflow))
+        htop = np.hstack((h2[::-1], h, h2))
+        zetabot = np.hstack((zeta2[::-1], zeta, zeta2))
+        xs = np.vstack((xh, xh))
+        ys = np.vstack((htop, zetabot))
+        Qs = np.vstack((Qh, zeros(len(xh))))
+        if self.Nstreamlines is not None and self.Nstreamlines > 0:
+            contour(xs, ys, Qs, self.Nstreamlines)
+        if xmin is None:
+            xmin = -self.W - self.Loutflow
+        if xmax is None:
+            xmax = self.W + self.Loutflow
+        plot([min(xmin, -self.W - self.Loutflow), -self.W], [0, 0], linewidth=5, color=[.8, .8, .8])
+        plot([min(xmax, self.W + self.Loutflow), self.W], [0, 0], linewidth=5, color=[.8, .8, .8])
+        if plotbase: plot([xmin, xmax], [-self.D, -self.D], linewidth=5, color='k')
+        xlim(xmin, xmax)
         show()
 
 
