@@ -251,7 +251,8 @@ class SemiCoastHead(SemiCoast):
         self.givenx = x
         self.givenh = h
         # find gradient using log transform of grad to avoid negative values
-        start = (self.givenh - self.hs) / abs(x)
+        # Start is exact solution for regular confined flow dived by 10 to start out low and avoid errors
+        start = (self.givenh - self.hs) / (abs(x) + self.lab) / 10  
         #result = brentq(self.findgrad2, 1e-12, start)
         result = fsolve(self.findgrad, np.log(start), full_output=1)
         if result[2] == 1:
